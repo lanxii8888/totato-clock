@@ -1,0 +1,28 @@
+{
+  "name": "tomato-clock",
+  "version": "1.0.0",
+  "description": "番茄时钟与白噪音应用",
+  "scripts": {
+    "sync": "npx cap sync",
+    "build:android": "npx cap build android",
+    "update:android": "npx cap update android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  },
+  "keywords": [
+    "tomato",
+    "timer",
+    "pomodoro",
+    "white-noise",
+    "focus"
+  ],
+  "author": "Tomato Clock",
+  "license": "MIT"
+}

@@ -1,0 +1,2873 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atmospheric Player</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=IM+Fell+English:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --accent: #7ec8e3;
+        --accent2: #c9e4f0;
+        --text: #ddeeff;
+        --muted: rgba(200, 230, 255, 0.5);
+        --card-bg: rgba(10, 25, 40, 0.6);
+        --glass-border: rgba(255, 255, 255, 0.12);
+      }
+
+      body {
+        min-height: 100vh;
+        font-family: "Noto Serif SC", serif;
+        color: var(--text);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        background: #0a1520;
+        transition: background 2s ease;
+      }
+
+      #bgLayer {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        background: radial-gradient(ellipse at 30% 0%, #0d2a40 0%, #070f1a 60%);
+        transition: background 2s ease;
+      }
+
+      #fogLayer {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 2s ease;
+      }
+      #fogLayer::before,
+      #fogLayer::after {
+        content: "";
+        position: absolute;
+        width: 200%;
+        height: 100%;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.003' numOctaves='4' seed='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+        background-size: 800px 400px;
+        opacity: 0.5;
+        animation: fogDrift 40s linear infinite;
+      }
+      #fogLayer::after {
+        animation-duration: 65s;
+        animation-direction: reverse;
+        top: 40%;
+        opacity: 0.3;
+      }
+      @keyframes fogDrift {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      #mainCanvas {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+      }
+      #fxCanvas {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+      }
+
+      #ripplesLayer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 140px;
+        z-index: 2;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 1.5s ease;
+      }
+      .ripple {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid rgba(174, 214, 241, 0.25);
+        animation: rippleExp 2.5s ease-out forwards;
+        transform: scale(0);
+        opacity: 0;
+      }
+      @keyframes rippleExp {
+        0% {
+          transform: scale(0);
+          opacity: 0.7;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 0;
+        }
+      }
+
+      #lightningOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+        background: rgba(200, 180, 255, 0.8);
+        opacity: 0;
+        transition: opacity 0.05s;
+      }
+
+      /* ===== INDOOR SCENE (室内) ===== */
+      #indoorCanvas {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 2.2s ease;
+      }
+      #indoorBg {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 2.2s ease;
+        overflow: hidden;
+      }
+      /* Floor */
+      #indoorBg::before {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 38%;
+        background: linear-gradient(
+          to top,
+          #1a0e06 0%,
+          #221208 40%,
+          transparent 100%
+        );
+      }
+      /* Ceiling */
+      #indoorBg::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 20%;
+        background: linear-gradient(
+          to bottom,
+          #0e0804 0%,
+          #180e06 60%,
+          transparent 100%
+        );
+      }
+      /* Warm vignette */
+      .indoor-vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse at 50% 50%,
+          transparent 30%,
+          rgba(10, 5, 0, 0.55) 75%,
+          rgba(5, 2, 0, 0.85) 100%
+        );
+      }
+      /* Lamp cone beams */
+      .lamp-beam {
+        position: absolute;
+        clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+        background: linear-gradient(
+          to bottom,
+          rgba(255, 210, 120, 0.14) 0%,
+          rgba(255, 185, 80, 0.06) 55%,
+          transparent 100%
+        );
+        pointer-events: none;
+        animation: beamBreath 5s ease-in-out infinite;
+        transform-origin: top center;
+      }
+      @keyframes beamBreath {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+        40% {
+          opacity: 0.82;
+          transform: scaleX(1.04);
+        }
+        70% {
+          opacity: 0.92;
+          transform: scaleX(0.97);
+        }
+      }
+      /* Candle flame (CSS) */
+      .candle-wrap {
+        position: absolute;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .candle-body {
+        width: 8px;
+        height: 40px;
+        background: linear-gradient(to top, #c8a060, #e8c88a);
+        border-radius: 3px 3px 1px 1px;
+        position: relative;
+      }
+      .candle-flame {
+        width: 10px;
+        height: 18px;
+        background: radial-gradient(
+          ellipse at 50% 80%,
+          #fff9e0 0%,
+          #ffdf60 30%,
+          #ff9020 65%,
+          transparent 100%
+        );
+        border-radius: 50% 50% 30% 30%;
+        position: absolute;
+        top: -16px;
+        left: 50%;
+        transform: translateX(-50%);
+        animation: flameDance 0.9s ease-in-out infinite alternate;
+        filter: blur(0.6px);
+      }
+      .candle-flame::after {
+        content: "";
+        position: absolute;
+        width: 4px;
+        height: 8px;
+        background: radial-gradient(ellipse, #fff 0%, transparent 80%);
+        border-radius: 50%;
+        top: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      @keyframes flameDance {
+        0% {
+          transform: translateX(-50%) scaleX(1) scaleY(1) skewX(0deg);
+          opacity: 1;
+        }
+        25% {
+          transform: translateX(-48%) scaleX(0.88) scaleY(1.06) skewX(-4deg);
+        }
+        60% {
+          transform: translateX(-52%) scaleX(1.1) scaleY(0.95) skewX(3deg);
+        }
+        100% {
+          transform: translateX(-50%) scaleX(0.92) scaleY(1.08) skewX(-2deg);
+          opacity: 0.9;
+        }
+      }
+      .candle-glow {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 190, 60, 0.28) 0%,
+          transparent 70%
+        );
+        width: 120px;
+        height: 100px;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        animation: candleGlow 0.9s ease-in-out infinite alternate;
+      }
+      @keyframes candleGlow {
+        0% {
+          opacity: 1;
+          transform: translateX(-50%) scale(1);
+        }
+        100% {
+          opacity: 0.75;
+          transform: translateX(-50%) scale(1.12);
+        }
+      }
+      /* Bookshelf silhouette */
+      .shelf {
+        position: absolute;
+        pointer-events: none;
+        background: #120a04;
+      }
+      .shelf-board {
+        position: absolute;
+        left: 0;
+        right: 0;
+        background: #1e1006;
+      }
+      .shelf-book {
+        position: absolute;
+        bottom: 0;
+        border-radius: 1px 1px 0 0;
+        opacity: 0.75;
+      }
+
+      #waveLayer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        height: 200px;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity 1.5s ease;
+      }
+      .wave {
+        position: absolute;
+        bottom: 0;
+        left: -50%;
+        width: 200%;
+        border-radius: 40%;
+      }
+      .wave1 {
+        height: 80px;
+        background: rgba(32, 178, 170, 0.18);
+        animation: waveMov 7s ease-in-out infinite;
+      }
+      .wave2 {
+        height: 60px;
+        background: rgba(32, 178, 170, 0.12);
+        animation: waveMov 10s ease-in-out infinite reverse;
+        bottom: 12px;
+      }
+      .wave3 {
+        height: 42px;
+        background: rgba(100, 210, 220, 0.09);
+        animation: waveMov 14s ease-in-out infinite;
+        bottom: 22px;
+      }
+      @keyframes waveMov {
+        0%,
+        100% {
+          transform: translateX(0) rotate(0deg);
+        }
+        50% {
+          transform: translateX(4%) rotate(1deg);
+        }
+      }
+
+      /* CLOUD CANVAS */
+      #cloudCanvas {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 2.5s ease;
+      }
+
+      /* SEAGULL */
+      .seagull {
+        position: fixed;
+        z-index: 3;
+        pointer-events: none;
+        font-size: 1.3rem;
+        opacity: 0;
+        animation: seagullFly linear infinite;
+      }
+      @keyframes seagullFly {
+        0% {
+          transform: translateX(-100px) translateY(0);
+          opacity: 0;
+        }
+        5% {
+          opacity: 0.7;
+        }
+        48% {
+          transform: translateX(48vw) translateY(-25px) scaleX(1);
+        }
+        50% {
+          transform: translateX(50vw) translateY(-28px) scaleX(-1);
+        }
+        95% {
+          opacity: 0.7;
+        }
+        100% {
+          transform: translateX(calc(100vw + 100px)) translateY(8px) scaleX(-1);
+          opacity: 0;
+        }
+      }
+
+      /* SCENE SWITCHER */
+      .scene-bar-wrap {
+        position: fixed;
+        top: 16px;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .scene-bar-track {
+        pointer-events: auto;
+        width: 370px; /* matches .card width exactly */
+        position: relative;
+        border-radius: 40px;
+      }
+
+      .scene-bar {
+        display: flex;
+        align-items: center;
+        padding: 5px 6px;
+        background: rgba(0, 0, 0, 0.42);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 40px;
+        backdrop-filter: blur(24px) saturate(1.4);
+        gap: 4px;
+        width: 100%;
+      }
+
+      .scene-btn {
+        flex: 1; /* each button takes equal share of the bar */
+        min-width: 0; /* prevent flex blowout */
+        border: none;
+        cursor: pointer;
+        border-radius: 28px;
+        padding: 7px 6px;
+        font-size: 0.68rem;
+        font-family: "Noto Serif SC", serif;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.45);
+        background: transparent;
+        transition:
+          color 0.22s,
+          background 0.22s,
+          box-shadow 0.22s,
+          transform 0.12s;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .scene-btn:hover {
+        color: rgba(255, 255, 255, 0.82);
+      }
+      .scene-btn:active {
+        transform: scale(0.92);
+      }
+      .scene-btn.active {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.14);
+        box-shadow:
+          0 2px 12px rgba(0, 0, 0, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      }
+      .scene-icon {
+        font-size: 0.88rem;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+
+      /* CARD */
+      .card {
+        position: relative;
+        z-index: 10;
+        width: 370px;
+        background: var(--card-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 26px;
+        padding: 36px 32px 28px;
+        backdrop-filter: blur(28px) saturate(1.6);
+        box-shadow:
+          0 0 60px rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.09);
+        animation: cardIn 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+        transition: box-shadow 2s ease;
+      }
+      @keyframes cardIn {
+        from {
+          opacity: 0;
+          transform: translateY(28px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* Mobile responsive */
+      @media (max-width: 420px) {
+        .card {
+          width: calc(100vw - 24px);
+          padding: 28px 20px 22px;
+          border-radius: 20px;
+        }
+        .scene-bar-track {
+          width: calc(100vw - 24px); /* mirrors .card */
+        }
+        .scene-bar-wrap {
+          top: 12px;
+        }
+        .scene-btn {
+          padding: 6px 4px;
+          font-size: 0.62rem;
+          gap: 3px;
+        }
+        .scene-icon {
+          font-size: 0.8rem;
+        }
+        .album-wrap {
+          width: 136px;
+          height: 136px;
+        }
+        .album {
+          width: 136px;
+          height: 136px;
+        }
+      }
+
+      .card-glass {
+        position: absolute;
+        inset: 0;
+        border-radius: 26px;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .glass-drop {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        animation: glassDrop linear infinite;
+        opacity: 0;
+      }
+      @keyframes glassDrop {
+        0% {
+          opacity: 0;
+          transform: translateY(-8px) scaleY(0.5);
+        }
+        15% {
+          opacity: 0.65;
+        }
+        80% {
+          opacity: 0.35;
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(130%) scaleY(1);
+        }
+      }
+
+      /* ALBUM */
+      .album-wrap {
+        position: relative;
+        width: 160px;
+        height: 160px;
+        margin: 0 auto 26px;
+      }
+      .a-ring {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid rgba(126, 200, 227, 0.16);
+        animation: rPulse 3s ease-in-out infinite;
+        transition: border-color 2s;
+      }
+      .a-ring:nth-child(1) {
+        inset: -8px;
+      }
+      .a-ring:nth-child(2) {
+        inset: -18px;
+        border-color: rgba(126, 200, 227, 0.07);
+        animation-delay: 0.6s;
+      }
+      @keyframes rPulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.04);
+          opacity: 0.5;
+        }
+      }
+
+      .album {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.06);
+        animation: spin 20s linear infinite paused;
+        background: radial-gradient(
+          circle at 35% 35%,
+          #1a4060,
+          #0a1e30 60%,
+          #060d16
+        );
+        transition:
+          background 2s,
+          box-shadow 2s;
+      }
+      .album.playing {
+        animation-play-state: running;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .album::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transition: background 2s;
+      }
+      .album::after {
+        content: "";
+        position: absolute;
+        inset: 20px;
+        border-radius: 50%;
+        background: repeating-radial-gradient(
+          circle,
+          transparent,
+          transparent 3px,
+          rgba(255, 255, 255, 0.02) 3px,
+          rgba(255, 255, 255, 0.02) 4px
+        );
+      }
+      .album-dot {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #0a1520;
+        border: 2px solid rgba(126, 200, 227, 0.3);
+        position: relative;
+        z-index: 2;
+        box-shadow: 0 0 10px rgba(126, 200, 227, 0.2);
+        transition:
+          background 2s,
+          border-color 2s,
+          box-shadow 2s;
+      }
+      .album-icon {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .album.playing .album-icon {
+        opacity: 1;
+      }
+
+      /* SONG INFO */
+      .song-info {
+        text-align: center;
+        margin-bottom: 22px;
+      }
+      .song-title {
+        font-family: "IM Fell English", serif;
+        font-size: 1.32rem;
+        font-weight: 400;
+        margin-bottom: 5px;
+        letter-spacing: 0.02em;
+        text-shadow: 0 0 20px rgba(126, 200, 227, 0.3);
+        transition:
+          text-shadow 2s,
+          color 2s;
+      }
+      .song-artist {
+        font-size: 0.77rem;
+        color: var(--muted);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      /* VISUALIZER */
+      .visualizer {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 3px;
+        height: 32px;
+        margin-bottom: 18px;
+      }
+      .bar {
+        width: 3px;
+        border-radius: 2px;
+        min-height: 3px;
+        opacity: 0.7;
+        background: linear-gradient(to top, var(--accent), var(--accent2));
+        animation: bDance 0.8s ease-in-out infinite alternate;
+        transition: background 2s;
+      }
+      .bar:nth-child(odd) {
+        animation-duration: 0.6s;
+      }
+      .bar:nth-child(3n) {
+        animation-duration: 1.1s;
+      }
+      @keyframes bDance {
+        from {
+          height: 3px;
+          opacity: 0.4;
+        }
+        to {
+          height: var(--h, 24px);
+          opacity: 0.9;
+        }
+      }
+      .visualizer.paused .bar {
+        animation-play-state: paused;
+      }
+
+      /* PROGRESS */
+      .progress-wrap {
+        height: 3px;
+        background: rgba(126, 200, 227, 0.1);
+        border-radius: 2px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        position: relative;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 0;
+        border-radius: 2px;
+        position: relative;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        box-shadow: 0 0 8px rgba(126, 200, 227, 0.4);
+        transition:
+          background 2s,
+          box-shadow 2s;
+      }
+      .progress-fill::after {
+        content: "";
+        position: absolute;
+        right: -4px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent2);
+        box-shadow: 0 0 8px rgba(126, 200, 227, 0.6);
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .progress-wrap:hover .progress-fill::after {
+        opacity: 1;
+      }
+      .time-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin-bottom: 20px;
+        letter-spacing: 0.05em;
+      }
+
+      /* CONTROLS */
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+      }
+      .btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--muted);
+        transition:
+          color 0.2s,
+          transform 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+      }
+      .btn:hover {
+        color: var(--accent2);
+        transform: scale(1.1);
+      }
+      .btn:active {
+        transform: scale(0.94);
+      }
+      .btn.active {
+        color: var(--accent);
+      }
+      .btn {
+        position: relative;
+      }
+      .repeat-badge {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        font-size: 8px;
+        font-weight: bold;
+        color: var(--accent);
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 50%;
+        width: 14px;
+        height: 14px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #bRepeat.active .repeat-badge {
+        display: flex;
+        opacity: 1;
+      }
+      .btn-play {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: linear-gradient(
+          135deg,
+          rgba(126, 200, 227, 0.2),
+          rgba(126, 200, 227, 0.05)
+        );
+        border: 1px solid rgba(126, 200, 227, 0.3) !important;
+        color: var(--accent2) !important;
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.3),
+          0 0 20px rgba(126, 200, 227, 0.1);
+        transition:
+          all 0.2s,
+          background 2s !important;
+      }
+      .btn-play:hover {
+        transform: scale(1.07) !important;
+        box-shadow:
+          0 4px 24px rgba(0, 0, 0, 0.4),
+          0 0 32px rgba(126, 200, 227, 0.25) !important;
+      }
+
+      /* VOLUME */
+      .volume-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      input[type="range"].vol {
+        flex: 1;
+        -webkit-appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        background: linear-gradient(
+          90deg,
+          var(--accent) 70%,
+          rgba(126, 200, 227, 0.1) 70%
+        );
+        outline: none;
+        cursor: pointer;
+      }
+      input[type="range"].vol::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent2);
+        cursor: pointer;
+        box-shadow: 0 0 6px rgba(126, 200, 227, 0.5);
+      }
+
+      /* PLAYLIST */
+      .playlist-section {
+        margin-top: 16px;
+      }
+      .playlist-label {
+        font-size: 0.6rem;
+        letter-spacing: 0.15em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .pl-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+      .pl-scroll::-webkit-scrollbar {
+        width: 2px;
+      }
+      .pl-scroll::-webkit-scrollbar-thumb {
+        background: rgba(126, 200, 227, 0.2);
+        border-radius: 2px;
+      }
+      .pl-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 11px;
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .pl-item:hover {
+        background: rgba(126, 200, 227, 0.08);
+        border-color: rgba(126, 200, 227, 0.2);
+      }
+      .pl-item.active {
+        background: rgba(126, 200, 227, 0.11);
+        border-color: rgba(126, 200, 227, 0.28);
+      }
+      .pl-num {
+        font-size: 0.62rem;
+        color: var(--muted);
+        width: 14px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .pl-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .pl-title {
+        font-size: 0.72rem;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pl-artist {
+        font-size: 0.62rem;
+        color: var(--muted);
+      }
+      .pl-dur {
+        font-size: 0.62rem;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+
+      /* BADGE */
+      .badge {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 2;
+        font-size: 0.62rem;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent);
+        animation: dotPulse 2s ease-in-out infinite;
+        transition:
+          background 2s,
+          box-shadow 2s;
+      }
+      @keyframes dotPulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.45;
+          transform: scale(0.8);
+        }
+      }
+
+      /* TRANSITION */
+      #transOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: #000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s ease;
+      }
+      #transOverlay.on {
+        opacity: 0.65;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bgLayer"></div>
+    <div id="fogLayer"></div>
+    <canvas id="mainCanvas"></canvas>
+    <canvas id="fxCanvas"></canvas>
+    <div id="ripplesLayer"></div>
+    <div id="lightningOverlay"></div>
+    <div id="waveLayer">
+      <div class="wave wave1"></div>
+      <div class="wave wave2"></div>
+      <div class="wave wave3"></div>
+    </div>
+    <canvas id="cloudCanvas"></canvas>
+    <!-- INDOOR SCENE (室内) -->
+    <div id="indoorBg">
+      <div class="indoor-vignette"></div>
+      <!-- Lamp beams -->
+      <div
+        class="lamp-beam"
+        style="left: 8%; top: 0; width: 22%; height: 65%"
+      ></div>
+      <div
+        class="lamp-beam"
+        style="
+          left: 72%;
+          top: 0;
+          width: 18%;
+          height: 55%;
+          animation-delay: 1.2s;
+        "
+      ></div>
+      <!-- Bookshelf silhouette (right side) -->
+      <div
+        class="shelf"
+        style="right: 0; top: 10%; width: 80px; height: 72%"
+      ></div>
+      <!-- Candles -->
+      <div class="candle-wrap" style="left: 18%; bottom: 28%">
+        <div class="candle-glow"></div>
+        <div class="candle-body"><div class="candle-flame"></div></div>
+      </div>
+      <div
+        class="candle-wrap"
+        style="right: 22%; bottom: 32%; transform: scale(0.8)"
+      >
+        <div class="candle-glow"></div>
+        <div class="candle-body">
+          <div class="candle-flame" style="animation-delay: 0.3s"></div>
+        </div>
+      </div>
+    </div>
+    <canvas id="indoorCanvas"></canvas>
+    <div id="transOverlay"></div>
+
+    <!-- SCENE BAR -->
+    <div class="scene-bar-wrap">
+      <div class="scene-bar-track" id="sceneTrack">
+        <div class="scene-bar" id="sceneBar">
+          <button class="scene-btn active" data-scene="rainy">
+            <span class="scene-icon">🌧</span>小雨
+          </button>
+          <button class="scene-btn" data-scene="thunder">
+            <span class="scene-icon">⛈</span>雷雨
+          </button>
+          <button class="scene-btn" data-scene="storm">
+            <span class="scene-icon">💨</span>狂风
+          </button>
+          <button class="scene-btn" data-scene="cafe">
+            <span class="scene-icon">🕯</span>室内
+          </button>
+          <button class="scene-btn" data-scene="beach">
+            <span class="scene-icon">🌊</span>海边
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYER -->
+    <div class="card">
+      <div class="card-glass" id="cardGlass"></div>
+      <div class="badge">
+        <div class="badge-dot" id="bdot"></div>
+        <span id="btext">RAINY · 14°C</span>
+      </div>
+
+      <div class="album-wrap" style="position: relative; z-index: 1">
+        <div class="a-ring" id="r1"></div>
+        <div class="a-ring" id="r2"></div>
+        <div class="album" id="album">
+          <div class="album-dot" id="adot"></div>
+          <!-- <div class="album-icon" id="albumIcon">🌧</div> -->
+        </div>
+      </div>
+
+      <div class="song-info" style="position: relative; z-index: 1">
+        <div class="song-title" id="sTitle">Rainy Night in Tokyo</div>
+        <div class="song-artist" id="sArtist">Ambient Dreams</div>
+      </div>
+
+      <div
+        class="visualizer"
+        id="viz"
+        style="position: relative; z-index: 1"
+      ></div>
+
+      <div style="position: relative; z-index: 1">
+        <div class="progress-wrap" id="pWrap">
+          <div class="progress-fill" id="pFill"></div>
+        </div>
+        <div class="time-row">
+          <span id="cTime">0:00</span><span id="tTime">4:02</span>
+        </div>
+      </div>
+
+      <div class="controls" style="position: relative; z-index: 1">
+        <button class="btn" id="bShuffle">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="16 3 21 3 21 8" />
+            <line x1="4" y1="20" x2="21" y2="3" />
+            <polyline points="21 16 21 21 16 21" />
+            <line x1="15" y1="15" x2="21" y2="21" />
+          </svg>
+        </button>
+        <button class="btn" id="bPrev">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="19 20 9 12 19 4 19 20" />
+            <line
+              x1="5"
+              y1="19"
+              x2="5"
+              y2="5"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+        <button class="btn btn-play" id="bPlay">
+          <svg
+            id="iPlay"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          <svg
+            id="iPause"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style="display: none"
+          >
+            <rect x="6" y="4" width="4" height="16" />
+            <rect x="14" y="4" width="4" height="16" />
+          </svg>
+        </button>
+        <button class="btn" id="bNext">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 4 15 12 5 20 5 4" />
+            <line
+              x1="19"
+              y1="5"
+              x2="19"
+              y2="19"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+        <button class="btn" id="bRepeat">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="17 1 21 5 17 9" />
+            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+            <polyline points="7 23 3 19 7 15" />
+            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </svg>
+          <span class="repeat-badge" id="repeatBadge">1</span>
+        </button>
+      </div>
+
+      <div class="volume-row" style="position: relative; z-index: 1">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        </svg>
+        <input type="range" class="vol" id="vol" min="0" max="100" value="70" />
+      </div>
+
+      <div class="playlist-section" style="position: relative; z-index: 1">
+        <div class="playlist-label" id="plLabel">🌧 雨夜歌单</div>
+        <div class="pl-scroll" id="plList"></div>
+      </div>
+    </div>
+
+    <script>
+      // =======================================================
+      // SCENE DATA
+      // =======================================================
+      const SCENES = {
+        rainy: {
+          badge: "RAINY · 14°C",
+          bg: "radial-gradient(ellipse at 30% 0%,#0d2a40,#070f1a 60%)",
+          body: "#0a1520",
+          accent: "#7ec8e3",
+          accent2: "#c9e4f0",
+          text: "#ddeeff",
+          muted: "rgba(200,230,255,0.5)",
+          card: "rgba(10,25,40,0.6)",
+          ringA: "rgba(126,200,227,0.16)",
+          ringB: "rgba(126,200,227,0.07)",
+          albumBg:
+            "radial-gradient(circle at 35% 35%,#1a4060,#0a1e30 60%,#060d16)",
+          albumGlow:
+            "radial-gradient(circle at 40% 30%,rgba(174,214,241,0.14),transparent 55%)",
+          albumShadow:
+            "0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(126,200,227,.08)",
+          dotBg: "#0a1520",
+          pGlow: "rgba(126,200,227,.4)",
+          fog: 1,
+          ripples: 1,
+          rain: 1,
+          thunder: 0,
+          storm: 0,
+          steam: 0,
+          coffee: 0,
+          waves: 0,
+          beach: 0,
+          rainN: 180,
+          rainSpd: [5, 10],
+          rainLen: [8, 20],
+          rainAngle: 0.5,
+          rainA: [0.05, 0.3],
+          rainColor: "#aed6f1",
+          label: "🌧 雨夜歌单",
+          tracks: [
+            { t: "Rainy Night in Tokyo", a: "Ambient Dreams", d: 242 },
+            { t: "Evening Rain", a: "lo-fi collective", d: 198 },
+            { t: "Puddles & Neon", a: "City Sound", d: 315 },
+            { t: "Quiet Drizzle", a: "Rain.wav", d: 267 },
+          ],
+        },
+        thunder: {
+          badge: "THUNDER · 11°C",
+          bg: "radial-gradient(ellipse at 50% 0%,#1a1a2e,#050510 70%)",
+          body: "#080812",
+          accent: "#9b7fe8",
+          accent2: "#c8b8ff",
+          text: "#e8e0ff",
+          muted: "rgba(200,180,255,0.5)",
+          card: "rgba(15,15,35,0.65)",
+          ringA: "rgba(155,127,232,0.18)",
+          ringB: "rgba(155,127,232,0.08)",
+          albumBg:
+            "radial-gradient(circle at 35% 35%,#2a1a50,#0f0a20 60%,#050310)",
+          albumGlow:
+            "radial-gradient(circle at 40% 30%,rgba(155,127,232,0.18),transparent 55%)",
+          albumShadow:
+            "0 8px 32px rgba(0,0,0,.7),0 0 30px rgba(155,127,232,.15)",
+          dotBg: "#080812",
+          pGlow: "rgba(155,127,232,.5)",
+          fog: 1,
+          ripples: 1,
+          rain: 1,
+          thunder: 1,
+          storm: 0,
+          steam: 0,
+          coffee: 0,
+          waves: 0,
+          beach: 0,
+          rainN: 300,
+          rainSpd: [8, 16],
+          rainLen: [12, 28],
+          rainAngle: 1.5,
+          rainA: [0.08, 0.4],
+          rainColor: "#c8b8ff",
+          label: "⛈ 雷鸣歌单",
+          tracks: [
+            { t: "雷雨", a: "本地音频", d: 0, src: "audio/rainy/雷雨.wav" },
+            {
+              t: "雷雨 (2)",
+              a: "本地音频",
+              d: 0,
+              src: "audio/rainy/雷雨 (2).wav",
+            },
+            {
+              t: "雷雨 (3)",
+              a: "本地音频",
+              d: 0,
+              src: "audio/rainy/雷雨 (3).wav",
+            },
+          ],
+        },
+        storm: {
+          badge: "GALE · 7°C",
+          bg: "radial-gradient(ellipse at 50% 20%,#2a2615 0%,#141208 55%,#070604 100%)",
+          body: "#070604",
+          accent: "#c8b840",
+          accent2: "#ede89a",
+          text: "#f2edcc",
+          muted: "rgba(230,220,150,0.45)",
+          card: "rgba(22,20,10,0.7)",
+          ringA: "rgba(200,184,64,0.2)",
+          ringB: "rgba(200,184,64,0.09)",
+          albumBg:
+            "radial-gradient(circle at 35% 35%,#3a3010,#1e1a06 60%,#0a0804)",
+          albumGlow:
+            "radial-gradient(circle at 40% 30%,rgba(200,184,64,0.2),transparent 55%)",
+          albumShadow:
+            "0 8px 32px rgba(0,0,0,.75),0 0 30px rgba(200,184,64,.14)",
+          dotBg: "#070604",
+          pGlow: "rgba(200,184,64,.45)",
+          fog: 1,
+          ripples: 0,
+          rain: 0,
+          thunder: 0,
+          storm: 1,
+          steam: 0,
+          coffee: 0,
+          waves: 0,
+          beach: 0,
+          rainN: 0,
+          rainAngle: 0,
+          rainA: [0, 0],
+          rainSpd: [0, 0],
+          rainLen: [0, 0],
+          rainColor: "transparent",
+          label: "💨 狂风歌单",
+          tracks: [
+            { t: "狂风", a: "本地音频", d: 0, src: "audio/rainy/狂风.wav" },
+            {
+              t: "狂风 (2)",
+              a: "本地音频",
+              d: 0,
+              src: "audio/rainy/狂风 (2).wav",
+            },
+            {
+              t: "狂风 (3)",
+              a: "本地音频",
+              d: 0,
+              src: "audio/rainy/狂风 (3).wav",
+            },
+          ],
+        },
+        cafe: {
+          badge: "INDOOR · 20°C",
+          bg: "radial-gradient(ellipse at 50% 30%,#2a1808 0%,#140c04 50%,#080402 100%)",
+          body: "#080402",
+          accent: "#c8903c",
+          accent2: "#edc878",
+          text: "#f0e0c0",
+          muted: "rgba(220,190,130,0.5)",
+          card: "rgba(28,16,6,0.72)",
+          ringA: "rgba(200,144,60,0.22)",
+          ringB: "rgba(200,144,60,0.1)",
+          albumBg:
+            "radial-gradient(circle at 35% 35%,#5a3010,#2c1808 60%,#120a02)",
+          albumGlow:
+            "radial-gradient(circle at 40% 30%,rgba(255,170,80,0.22),transparent 55%)",
+          albumShadow: "0 8px 32px rgba(0,0,0,.7),0 0 30px rgba(200,144,60,.2)",
+          dotBg: "#080402",
+          pGlow: "rgba(200,144,60,.5)",
+          fog: 0,
+          ripples: 0,
+          rain: 0,
+          thunder: 0,
+          storm: 0,
+          steam: 0,
+          coffee: 1,
+          waves: 0,
+          beach: 0,
+          rainN: 0,
+          rainAngle: 0,
+          rainColor: "transparent",
+          label: "🕯 室内时光",
+          tracks: [
+            { t: "Candlelight Sonata", a: "Evening Room", d: 236 },
+            { t: "Ember & Ash", a: "Hearth Sessions", d: 284 },
+            { t: "Quiet Corner", a: "lo-fi indoor", d: 201 },
+            { t: "Lamplight Jazz", a: "Nocturne Duo", d: 318 },
+          ],
+        },
+        beach: {
+          badge: "BEACH · 28°C",
+          bg: "linear-gradient(180deg,#1a6080 0%,#0a3550 40%,#061525 100%)",
+          body: "#061525",
+          accent: "#20b2aa",
+          accent2: "#7fffd4",
+          text: "#d8f8ff",
+          muted: "rgba(180,240,255,0.5)",
+          card: "rgba(8,28,48,0.58)",
+          ringA: "rgba(32,178,170,0.2)",
+          ringB: "rgba(32,178,170,0.09)",
+          albumBg:
+            "radial-gradient(circle at 35% 35%,#0a3548,#051e30 60%,#020d18)",
+          albumGlow:
+            "radial-gradient(circle at 40% 30%,rgba(32,178,170,0.2),transparent 55%)",
+          albumShadow:
+            "0 8px 32px rgba(0,0,0,.5),0 0 28px rgba(32,178,170,.15)",
+          dotBg: "#061525",
+          pGlow: "rgba(32,178,170,.4)",
+          fog: 0,
+          ripples: 0,
+          rain: 1,
+          thunder: 0,
+          storm: 0,
+          steam: 0,
+          coffee: 0,
+          waves: 1,
+          beach: 1,
+          rainN: 18,
+          rainSpd: [1.5, 3.5],
+          rainLen: [6, 14],
+          rainAngle: 0.3,
+          rainA: [0.04, 0.15],
+          rainColor: "rgba(180,240,255,0.6)",
+          label: "🌊 海浪歌单",
+          tracks: [
+            { t: "Ocean Drive", a: "Coastal Breeze", d: 248 },
+            { t: "Tide & Sunrise", a: "Saltwater", d: 312 },
+            { t: "Seashell Radio", a: "Shore Dreams", d: 187 },
+            { t: "Midsummer Night", a: "Dusk & Waves", d: 345 },
+          ],
+        },
+      };
+
+      // =======================================================
+      // STATE
+      // =======================================================
+      let scene = "rainy";
+      let trackIdx = 0;
+      let playing = false;
+      let progSec = 0;
+      let raf,
+        rafTs = null;
+      let shuffled = false;
+      let repeatMode = 0;
+      let windNow = 0.5,
+        windTarget = 0.5,
+        windTimer = 0;
+      let drops = [];
+      let audio = new Audio();
+      audio.loop = true;
+
+      audio.addEventListener("ended", function () {
+        if (repeatMode === 1) {
+          audio.currentTime = 0;
+          audio.play().catch((e) => console.error("播放失败:", e));
+        } else {
+          playNextTrack();
+        }
+      });
+
+      audio.addEventListener("loadedmetadata", function () {
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track && track.src && audio.src.includes(track.src)) {
+          track.d = Math.floor(audio.duration);
+          updateUI();
+        }
+      });
+
+      audio.addEventListener("error", function (e) {
+        console.error("音频加载错误:", e);
+      });
+
+      // =======================================================
+      // CANVAS
+      // =======================================================
+      const mc = document.getElementById("mainCanvas");
+      const mx = mc.getContext("2d");
+      const fc = document.getElementById("fxCanvas");
+      const fx = fc.getContext("2d");
+
+      function resizeC() {
+        mc.width = fc.width = window.innerWidth;
+        mc.height = fc.height = window.innerHeight;
+      }
+      resizeC();
+      window.addEventListener("resize", resizeC);
+
+      // =======================================================
+      // RAIN SYSTEM
+      // =======================================================
+      function makeDrops() {
+        const s = SCENES[scene];
+        drops = [];
+        windNow = s.rainAngle;
+        windTarget = s.rainAngle;
+        for (let i = 0; i < s.rainN; i++) drops.push(mkDrop(true));
+      }
+
+      function mkDrop(scatter) {
+        const s = SCENES[scene];
+        const [mn, mx2] = s.rainSpd;
+        const [ml, xl] = s.rainLen;
+        const [ma, xa] = s.rainA;
+        return {
+          x: Math.random() * mc.width,
+          y: scatter ? Math.random() * mc.height : -50,
+          len: ml + Math.random() * (xl - ml),
+          spd: mn + Math.random() * (mx2 - mn),
+          alpha: ma + Math.random() * (xa - ma),
+          w: Math.random() < 0.25 ? 1.5 : 0.8,
+        };
+      }
+
+      function drawRain() {
+        const s = SCENES[scene];
+        mx.clearRect(0, 0, mc.width, mc.height);
+        if (s.rainN === 0 || scene === "storm") {
+          requestAnimationFrame(drawRain);
+          return;
+        }
+
+        windNow += (s.rainAngle - windNow) * 0.06;
+
+        mx.strokeStyle = s.rainColor;
+        drops.forEach((d) => {
+          mx.globalAlpha = d.alpha;
+          mx.lineWidth = d.w;
+          mx.beginPath();
+          mx.moveTo(d.x, d.y);
+          mx.lineTo(d.x - windNow * 2, d.y + d.len);
+          mx.stroke();
+          d.y += d.spd;
+          d.x -= windNow;
+          if (d.y > mc.height || d.x < -30) Object.assign(d, mkDrop(false));
+        });
+        mx.globalAlpha = 1;
+        requestAnimationFrame(drawRain);
+      }
+      requestAnimationFrame(drawRain);
+
+      // =======================================================
+      // LIGHTNING
+      // =======================================================
+      const lOvl = document.getElementById("lightningOverlay");
+      function scheduleLightning() {
+        if (scene !== "thunder") return;
+        setTimeout(
+          () => {
+            if (scene !== "thunder") return;
+            drawBolt();
+            flash();
+            setTimeout(() => {
+              fx.clearRect(0, 0, fc.width, fc.height);
+            }, 500);
+            scheduleLightning();
+          },
+          4500 + Math.random() * 10000,
+        );
+      }
+
+      function drawBolt() {
+        const w = fc.width,
+          h = fc.height;
+        fx.clearRect(0, 0, w, h);
+        fx.strokeStyle = "rgba(200,180,255,0.92)";
+        fx.lineWidth = 2;
+        fx.shadowBlur = 22;
+        fx.shadowColor = "rgba(180,150,255,0.85)";
+        fx.beginPath();
+        let x = w * 0.2 + Math.random() * w * 0.6,
+          y = 0;
+        fx.moveTo(x, y);
+        while (y < h * 0.72) {
+          x += (Math.random() - 0.5) * 80;
+          y += 28 + Math.random() * 40;
+          fx.lineTo(x, y);
+          if (Math.random() < 0.3) {
+            fx.moveTo(x, y);
+            fx.lineTo(
+              x + (Math.random() - 0.5) * 100,
+              y + 50 + Math.random() * 60,
+            );
+            fx.moveTo(x, y);
+          }
+        }
+        fx.stroke();
+        fx.shadowBlur = 0;
+      }
+
+      function flash() {
+        lOvl.style.opacity = ".6";
+        setTimeout(() => {
+          lOvl.style.opacity = "0";
+          setTimeout(() => {
+            lOvl.style.opacity = ".25";
+            setTimeout(() => {
+              lOvl.style.opacity = "0";
+            }, 70);
+          }, 70);
+        }, 55);
+      }
+
+      // =======================================================
+      // GALE / WIND CANVAS SYSTEM
+      // =======================================================
+      const galeCvs = document.createElement("canvas");
+      galeCvs.id = "galeCanvas";
+      galeCvs.style.cssText =
+        "position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity 1.8s ease;";
+      document.body.appendChild(galeCvs);
+      const galeCtx = galeCvs.getContext("2d");
+
+      function resizeGale() {
+        galeCvs.width = window.innerWidth;
+        galeCvs.height = window.innerHeight;
+      }
+      resizeGale();
+      window.addEventListener("resize", resizeGale);
+
+      let galeActive = false;
+      let galeRafId;
+      let galeTime = 0;
+
+      // --- Wind streaks ---
+      let streaks = [];
+      function mkStreak() {
+        const W = galeCvs.width,
+          H = galeCvs.height;
+        const y = Math.random() * H;
+        const spd = 14 + Math.random() * 22;
+        const len = 60 + Math.random() * 200;
+        return {
+          x: W + 20,
+          y,
+          vy: (Math.random() - 0.5) * 0.6, // very slight vertical drift
+          spd,
+          len,
+          w: 0.4 + Math.random() * 1.2,
+          alpha: 0.06 + Math.random() * 0.22,
+          curvature: (Math.random() - 0.5) * 0.008, // slight curve per frame
+        };
+      }
+
+      // --- Debris particles (leaves, dust clumps) ---
+      let debris = [];
+      function mkDebris() {
+        const W = galeCvs.width,
+          H = galeCvs.height;
+        const type =
+          Math.random() < 0.55 ? "dot" : Math.random() < 0.6 ? "leaf" : "line";
+        return {
+          x: W + 30 + Math.random() * 60,
+          y: 20 + Math.random() * (H - 40),
+          spd: 7 + Math.random() * 15,
+          vy: (Math.random() - 0.5) * 2.5,
+          r: type === "dot" ? 1.5 + Math.random() * 3.5 : 0,
+          len: type === "line" ? 8 + Math.random() * 16 : 0,
+          type,
+          angle: Math.random() * Math.PI * 2,
+          spin: (Math.random() - 0.5) * 0.18,
+          alpha: 0.3 + Math.random() * 0.5,
+          // leaf shape params
+          leafW: 3 + Math.random() * 5,
+          leafH: 5 + Math.random() * 9,
+          hue: 25 + Math.random() * 45, // warm dusty yellow-brown
+        };
+      }
+
+      // --- Gust pulse state ---
+      let gustStrength = 1.0;
+      let gustTarget = 1.0;
+      let gustTimer = 0;
+
+      // --- Card sway ---
+      let swayAngle = 0;
+      let swayV = 0;
+
+      function galeLoop() {
+        if (!galeActive) return;
+        galeTime++;
+        const W = galeCvs.width,
+          H = galeCvs.height;
+        galeCtx.clearRect(0, 0, W, H);
+
+        // Gust envelope
+        gustTimer--;
+        if (gustTimer <= 0) {
+          gustTarget = 0.5 + Math.random() * 1.8;
+          gustTimer = 35 + Math.random() * 80;
+        }
+        gustStrength += (gustTarget - gustStrength) * 0.03;
+
+        // ---- WIND STREAKS ----
+        // Spawn more during gusts
+        const spawnRate = Math.floor(gustStrength * 6);
+        for (let i = 0; i < spawnRate; i++) {
+          if (Math.random() < 0.6) streaks.push(mkStreak());
+        }
+
+        streaks = streaks.filter((s) => s.x > -s.len - 10);
+        streaks.forEach((s) => {
+          s.x -= s.spd * gustStrength;
+          s.y += s.vy;
+          s.vy += s.curvature;
+
+          // Streak gradient: bright mid, fading tails
+          const grd = galeCtx.createLinearGradient(s.x, s.y, s.x + s.len, s.y);
+          grd.addColorStop(0, `rgba(230,220,140,0)`);
+          grd.addColorStop(0.3, `rgba(230,220,140,${s.alpha * gustStrength})`);
+          grd.addColorStop(
+            0.7,
+            `rgba(220,210,130,${s.alpha * gustStrength * 0.8})`,
+          );
+          grd.addColorStop(1, `rgba(220,210,130,0)`);
+          galeCtx.beginPath();
+          galeCtx.moveTo(s.x, s.y);
+          galeCtx.lineTo(s.x + s.len, s.y + 1);
+          galeCtx.strokeStyle = grd;
+          galeCtx.lineWidth = s.w;
+          galeCtx.stroke();
+        });
+
+        // ---- DEBRIS ----
+        if (Math.random() < 0.12 * gustStrength) debris.push(mkDebris());
+        debris = debris.filter((d) => d.x > -40 && d.y > -40 && d.y < H + 40);
+
+        debris.forEach((d) => {
+          d.x -= d.spd * gustStrength;
+          d.y += d.vy;
+          d.vy += 0.04; // gravity
+          if (d.y > H - 60) d.vy -= 0.12; // ground bounce zone
+          d.angle += d.spin * gustStrength;
+
+          galeCtx.save();
+          galeCtx.translate(d.x, d.y);
+          galeCtx.rotate(d.angle);
+          galeCtx.globalAlpha = d.alpha;
+
+          if (d.type === "dot") {
+            const gr = galeCtx.createRadialGradient(0, 0, 0, 0, 0, d.r);
+            gr.addColorStop(0, `hsla(${d.hue},55%,68%,1)`);
+            gr.addColorStop(1, `hsla(${d.hue},55%,68%,0)`);
+            galeCtx.beginPath();
+            galeCtx.arc(0, 0, d.r, 0, Math.PI * 2);
+            galeCtx.fillStyle = gr;
+            galeCtx.fill();
+          } else if (d.type === "leaf") {
+            // Simple leaf: two bezier arcs
+            galeCtx.beginPath();
+            galeCtx.moveTo(0, -d.leafH / 2);
+            galeCtx.bezierCurveTo(
+              d.leafW,
+              0,
+              d.leafW,
+              d.leafH * 0.4,
+              0,
+              d.leafH / 2,
+            );
+            galeCtx.bezierCurveTo(
+              -d.leafW,
+              d.leafH * 0.4,
+              -d.leafW,
+              0,
+              0,
+              -d.leafH / 2,
+            );
+            galeCtx.fillStyle = `hsla(${d.hue},48%,42%,${d.alpha})`;
+            galeCtx.fill();
+            // Midrib
+            galeCtx.beginPath();
+            galeCtx.moveTo(0, -d.leafH / 2);
+            galeCtx.lineTo(0, d.leafH / 2);
+            galeCtx.strokeStyle = `hsla(${d.hue},40%,30%,${d.alpha * 0.6})`;
+            galeCtx.lineWidth = 0.6;
+            galeCtx.stroke();
+          } else {
+            // Line / twig
+            galeCtx.beginPath();
+            galeCtx.moveTo(-d.len / 2, 0);
+            galeCtx.lineTo(d.len / 2, 0);
+            galeCtx.strokeStyle = `hsla(${d.hue},40%,50%,${d.alpha})`;
+            galeCtx.lineWidth = 1.2;
+            galeCtx.stroke();
+          }
+          galeCtx.globalAlpha = 1;
+          galeCtx.restore();
+        });
+
+        // ---- DUST HAZE layer ----
+        // Soft gradient sweeping left
+        const duneX = (galeTime * 1.8 * gustStrength) % (W * 2);
+        const haze = galeCtx.createLinearGradient(
+          W - (duneX % W),
+          0,
+          W - (duneX % W) + W * 0.4,
+          0,
+        );
+        haze.addColorStop(0, "rgba(200,185,80,0)");
+        haze.addColorStop(0.4, `rgba(200,185,80,${0.04 * gustStrength})`);
+        haze.addColorStop(1, "rgba(200,185,80,0)");
+        galeCtx.fillStyle = haze;
+        galeCtx.fillRect(0, 0, W, H);
+
+        // ---- CARD SWAY ----
+        swayV +=
+          -swayAngle * 0.04 + (gustStrength - 1) * 0.25 * (Math.random() - 0.3);
+        swayV *= 0.88;
+        swayAngle += swayV;
+        swayAngle = Math.max(-4, Math.min(4, swayAngle));
+        const card = document.querySelector(".card");
+        if (card) {
+          card.style.transform = `rotate(${swayAngle * 0.4}deg) translateX(${swayAngle * 0.6}px)`;
+          card.style.transition = "transform 0.08s linear";
+        }
+
+        galeRafId = requestAnimationFrame(galeLoop);
+      }
+
+      function startGale() {
+        galeActive = true;
+        streaks = [];
+        debris = [];
+        gustStrength = 1;
+        gustTarget = 1;
+        gustTimer = 0;
+        swayAngle = 0;
+        swayV = 0;
+        galeCvs.style.opacity = "1";
+        cancelAnimationFrame(galeRafId);
+        galeRafId = requestAnimationFrame(galeLoop);
+      }
+
+      function stopGale() {
+        galeActive = false;
+        cancelAnimationFrame(galeRafId);
+        galeCvs.style.opacity = "0";
+        galeCtx.clearRect(0, 0, galeCvs.width, galeCvs.height);
+        const card = document.querySelector(".card");
+        if (card) {
+          card.style.transform = "";
+          card.style.transition = "";
+        }
+      }
+
+      // Legacy alias
+      function stormShaker() {}
+
+      // =======================================================
+      // RIPPLES
+      // =======================================================
+      const rLayer = document.getElementById("ripplesLayer");
+      let ripInt;
+      function startRipples() {
+        const s = SCENES[scene];
+        const rateMap = { thunder: 220, rainy: 400, beach: 600 };
+        const colorMap = {
+          thunder: "rgba(155,127,232,0.28)",
+          rainy: "rgba(174,214,241,0.25)",
+          beach: "rgba(32,178,170,0.2)",
+        };
+        rLayer.style.opacity = "1";
+        clearInterval(ripInt);
+        ripInt = setInterval(() => {
+          if (!SCENES[scene].ripples) return;
+          const r = document.createElement("div");
+          r.className = "ripple";
+          const w = 20 + Math.random() * 100;
+          r.style.cssText = `left:${Math.random() * 100}%;bottom:${Math.random() * 80}px;width:${w}px;height:${w * 0.27}px;border-color:${colorMap[scene] || colorMap.rainy};animation-duration:${1.6 + Math.random() * 2}s`;
+          rLayer.appendChild(r);
+          setTimeout(() => r.remove(), 5000);
+        }, rateMap[scene] || 400);
+      }
+      function stopRipples() {
+        clearInterval(ripInt);
+        rLayer.style.opacity = "0";
+      }
+
+      // =======================================================
+      // INDOOR SCENE (室内) — Canvas System
+      // =======================================================
+      const indoorCvs = document.getElementById("indoorCanvas");
+      const indoorCtx = indoorCvs.getContext("2d");
+      const indoorBgEl = document.getElementById("indoorBg");
+
+      let indoorActive = false;
+      let indoorRaf;
+      let indoorTime = 0;
+
+      function resizeIndoor() {
+        indoorCvs.width = window.innerWidth;
+        indoorCvs.height = window.innerHeight;
+      }
+      resizeIndoor();
+      window.addEventListener("resize", () => {
+        resizeIndoor();
+      });
+
+      // ── Floating dust motes in lamp beams ─────────────────
+      let motes = [];
+      function mkMote() {
+        const W = indoorCvs.width,
+          H = indoorCvs.height;
+        // Spawn mostly inside the two lamp cone areas
+        const inBeam = Math.random() < 0.7;
+        const bx = inBeam
+          ? Math.random() < 0.5
+            ? W * 0.08 + Math.random() * W * 0.22
+            : W * 0.72 + Math.random() * W * 0.18
+          : Math.random() * W;
+        return {
+          x: bx,
+          y: H * 0.3 + Math.random() * H * 0.5,
+          r: 0.8 + Math.random() * 2.2,
+          vx: (Math.random() - 0.5) * 0.18,
+          vy: -(0.04 + Math.random() * 0.14),
+          life: 0,
+          maxLife: 300 + Math.random() * 500,
+          hue: 32 + Math.random() * 20,
+          maxAlpha: inBeam
+            ? 0.55 + Math.random() * 0.35
+            : 0.1 + Math.random() * 0.15,
+          phase: Math.random() * Math.PI * 2,
+        };
+      }
+      function initMotes() {
+        motes = [];
+        for (let i = 0; i < 80; i++) motes.push(mkMote());
+      }
+
+      // ── Steam wisps from off-screen cups ──────────────────
+      let wisps = [];
+      const wispSources = [
+        { rx: 0.18, ry: 0.78 },
+        { rx: 0.55, ry: 0.82 },
+        { rx: 0.78, ry: 0.75 },
+      ];
+      function mkWisp() {
+        const W = indoorCvs.width,
+          H = indoorCvs.height;
+        const src = wispSources[Math.floor(Math.random() * wispSources.length)];
+        return {
+          x: src.rx * W + (Math.random() - 0.5) * 20,
+          y: src.ry * H,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: -(0.5 + Math.random() * 0.8),
+          r: 5 + Math.random() * 10,
+          life: 0,
+          maxLife: 100 + Math.random() * 80,
+          wobble: Math.random() * Math.PI * 2,
+          wobbleSpd: 0.018 + Math.random() * 0.025,
+        };
+      }
+
+      // ── Ember sparks (occasional, from candles) ───────────
+      let embers = [];
+      function mkEmber() {
+        const W = indoorCvs.width,
+          H = indoorCvs.height;
+        // Emit from one of two candle positions (matching HTML)
+        const cx = Math.random() < 0.5 ? W * 0.18 : W * 0.78;
+        const cy = H * 0.72 - 20;
+        return {
+          x: cx + (Math.random() - 0.5) * 6,
+          y: cy,
+          vx: (Math.random() - 0.5) * 1.4,
+          vy: -(1.2 + Math.random() * 2),
+          r: 0.8 + Math.random() * 1.4,
+          life: 0,
+          maxLife: 40 + Math.random() * 50,
+          hue: 20 + Math.random() * 30,
+        };
+      }
+
+      // ── LP record spinning overlay (subtle vinyl on canvas) ─
+      let vinylAngle = 0;
+
+      function drawVinyl(W, H) {
+        // Small faint vinyl disc in bottom-left corner, mostly decorative
+        const cx = W * 0.12,
+          cy = H * 0.88,
+          outerR = 36;
+        indoorCtx.save();
+        indoorCtx.translate(cx, cy);
+        indoorCtx.rotate(vinylAngle);
+        // Disc
+        const disc = indoorCtx.createRadialGradient(0, 0, 0, 0, 0, outerR);
+        disc.addColorStop(0, "rgba(60,35,15,0.9)");
+        disc.addColorStop(0.3, "rgba(40,22,8,0.85)");
+        disc.addColorStop(0.85, "rgba(55,30,10,0.8)");
+        disc.addColorStop(1, "rgba(30,15,5,0.7)");
+        indoorCtx.beginPath();
+        indoorCtx.arc(0, 0, outerR, 0, Math.PI * 2);
+        indoorCtx.fillStyle = disc;
+        indoorCtx.fill();
+        // Grooves
+        for (let gr = 10; gr < outerR; gr += 5) {
+          indoorCtx.beginPath();
+          indoorCtx.arc(0, 0, gr, 0, Math.PI * 2);
+          indoorCtx.strokeStyle = `rgba(255,200,100,0.04)`;
+          indoorCtx.lineWidth = 0.5;
+          indoorCtx.stroke();
+        }
+        // Label
+        indoorCtx.beginPath();
+        indoorCtx.arc(0, 0, 10, 0, Math.PI * 2);
+        indoorCtx.fillStyle = "rgba(180,90,30,0.7)";
+        indoorCtx.fill();
+        // Center hole
+        indoorCtx.beginPath();
+        indoorCtx.arc(0, 0, 2, 0, Math.PI * 2);
+        indoorCtx.fillStyle = "rgba(10,5,2,0.9)";
+        indoorCtx.fill();
+        // Sheen
+        const sheen = indoorCtx.createLinearGradient(
+          -outerR,
+          -outerR,
+          outerR,
+          outerR,
+        );
+        sheen.addColorStop(0, "rgba(255,210,140,0.12)");
+        sheen.addColorStop(0.5, "rgba(255,210,140,0)");
+        sheen.addColorStop(1, "rgba(255,210,140,0.06)");
+        indoorCtx.beginPath();
+        indoorCtx.arc(0, 0, outerR, 0, Math.PI * 2);
+        indoorCtx.fillStyle = sheen;
+        indoorCtx.fill();
+        indoorCtx.restore();
+      }
+
+      // ── Book silhouettes on shelf ─────────────────────────
+      const BOOKS = (() => {
+        const books = [];
+        const colors = [
+          "#3a1a08",
+          "#1e2a0a",
+          "#0a1a2a",
+          "#2a0a1a",
+          "#1a1808",
+          "#0e2010",
+          "#220e08",
+        ];
+        let bx = 4;
+        for (let i = 0; i < 18; i++) {
+          const w = 6 + Math.floor(Math.random() * 10);
+          const h = 28 + Math.floor(Math.random() * 38);
+          books.push({
+            x: bx,
+            w,
+            h,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            tilt: (Math.random() - 0.5) * 0.08,
+          });
+          bx += w + 1;
+          if (bx > 74) break;
+        }
+        return books;
+      })();
+
+      function drawShelf(W, H) {
+        const shelfX = W - 82,
+          shelfTop = H * 0.12,
+          shelfH = H * 0.7;
+        // Back panel
+        indoorCtx.fillStyle = "rgba(12,6,2,0.85)";
+        indoorCtx.fillRect(shelfX, shelfTop, 80, shelfH);
+        // Shelf boards
+        const numShelves = 4;
+        for (let s = 0; s <= numShelves; s++) {
+          const sy = shelfTop + (shelfH / numShelves) * s;
+          indoorCtx.fillStyle = "rgba(45,22,8,0.9)";
+          indoorCtx.fillRect(shelfX - 2, sy - 3, 84, 6);
+        }
+        // Books per shelf
+        for (let s = 0; s < numShelves; s++) {
+          const sy = shelfTop + (shelfH / numShelves) * (s + 1) - 6;
+          const shelfBooks = BOOKS.filter((_, i) => i % numShelves === s);
+          let bx = shelfX + 4;
+          shelfBooks.forEach((b) => {
+            indoorCtx.save();
+            indoorCtx.translate(bx + b.w / 2, sy);
+            indoorCtx.rotate(b.tilt);
+            indoorCtx.fillStyle = b.color;
+            indoorCtx.fillRect(-b.w / 2, -b.h, b.w, b.h);
+            // Spine highlight
+            indoorCtx.fillStyle = "rgba(255,200,120,0.06)";
+            indoorCtx.fillRect(-b.w / 2, -b.h, 2, b.h);
+            indoorCtx.restore();
+            bx += b.w + 1;
+          });
+        }
+      }
+
+      // ── Fireplace glow (bottom center) ────────────────────
+      let firePhase = 0;
+      function drawFireplace(W, H) {
+        firePhase += 0.04;
+        const fx = W * 0.5,
+          fy = H;
+        const flicker =
+          0.88 +
+          0.12 * Math.sin(firePhase * 2.3) +
+          0.06 * Math.sin(firePhase * 5.1);
+        const r = 180 * flicker;
+        const grd = indoorCtx.createRadialGradient(fx, fy, 0, fx, fy, r);
+        grd.addColorStop(0, `rgba(255,140,30,${0.22 * flicker})`);
+        grd.addColorStop(0.35, `rgba(220,80,10,${0.14 * flicker})`);
+        grd.addColorStop(0.7, `rgba(150,30,0,${0.07 * flicker})`);
+        grd.addColorStop(1, "rgba(100,20,0,0)");
+        indoorCtx.fillStyle = grd;
+        indoorCtx.fillRect(0, H - r, W, r + 1);
+      }
+
+      // ── Main indoor draw loop ─────────────────────────────
+      function drawIndoor() {
+        const W = indoorCvs.width,
+          H = indoorCvs.height;
+        indoorCtx.clearRect(0, 0, W, H);
+        indoorTime++;
+
+        // Fireplace glow
+        drawFireplace(W, H);
+
+        // Bookshelf
+        drawShelf(W, H);
+
+        // Vinyl record
+        if (playing) vinylAngle += 0.008;
+        drawVinyl(W, H);
+
+        // Spawn motes
+        if (motes.length < 100 && Math.random() < 0.35) motes.push(mkMote());
+        motes = motes.filter((m) => m.life < m.maxLife);
+        motes.forEach((m) => {
+          m.life++;
+          m.phase += 0.012;
+          m.x += m.vx + Math.sin(m.phase) * 0.22;
+          m.y += m.vy;
+          const t = m.life / m.maxLife;
+          const a =
+            (t < 0.15 ? t / 0.15 : t > 0.8 ? (1 - t) / 0.2 : 1) * m.maxAlpha;
+          const grd = indoorCtx.createRadialGradient(
+            m.x,
+            m.y,
+            0,
+            m.x,
+            m.y,
+            m.r,
+          );
+          grd.addColorStop(0, `hsla(${m.hue},80%,78%,${a})`);
+          grd.addColorStop(1, `hsla(${m.hue},80%,78%,0)`);
+          indoorCtx.beginPath();
+          indoorCtx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+          indoorCtx.fillStyle = grd;
+          indoorCtx.fill();
+        });
+
+        // Steam wisps
+        if (Math.random() < 0.18) wisps.push(mkWisp());
+        wisps = wisps.filter((w) => w.life < w.maxLife);
+        wisps.forEach((w) => {
+          w.life++;
+          w.wobble += w.wobbleSpd;
+          w.x += w.vx + Math.sin(w.wobble) * 0.4;
+          w.y += w.vy;
+          w.r += 0.04;
+          const t = w.life / w.maxLife;
+          const a = (t < 0.15 ? t / 0.15 : 1 - t) * 0.38;
+          const grd = indoorCtx.createRadialGradient(
+            w.x,
+            w.y,
+            0,
+            w.x,
+            w.y,
+            w.r,
+          );
+          grd.addColorStop(0, `rgba(255,230,200,${a})`);
+          grd.addColorStop(1, `rgba(255,230,200,0)`);
+          indoorCtx.beginPath();
+          indoorCtx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+          indoorCtx.fillStyle = grd;
+          indoorCtx.fill();
+        });
+
+        // Ember sparks (rare, ~every 3s)
+        if (Math.random() < 0.006) {
+          for (let i = 0; i < 3 + Math.floor(Math.random() * 5); i++)
+            embers.push(mkEmber());
+        }
+        embers = embers.filter((e) => e.life < e.maxLife);
+        embers.forEach((e) => {
+          e.life++;
+          e.x += e.vx;
+          e.y += e.vy;
+          e.vy += 0.06; // gravity
+          e.vx *= 0.98;
+          const t = e.life / e.maxLife;
+          const a = (1 - t) * 0.9;
+          indoorCtx.beginPath();
+          indoorCtx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+          indoorCtx.fillStyle = `hsla(${e.hue},90%,65%,${a})`;
+          indoorCtx.fill();
+        });
+
+        // Warm overall haze — lamp beam columns rendered via CSS, add subtle glow here
+        const beamGrd = indoorCtx.createLinearGradient(0, 0, 0, H);
+        beamGrd.addColorStop(0, "rgba(255,190,80,0.04)");
+        beamGrd.addColorStop(0.5, "rgba(255,160,60,0.02)");
+        beamGrd.addColorStop(1, "rgba(255,100,20,0.05)");
+        indoorCtx.fillStyle = beamGrd;
+        indoorCtx.fillRect(0, 0, W, H);
+      }
+
+      function indoorLoop() {
+        if (!indoorActive) return;
+        drawIndoor();
+        indoorRaf = requestAnimationFrame(indoorLoop);
+      }
+
+      function startIndoor() {
+        indoorActive = true;
+        indoorBgEl.style.opacity = "1";
+        indoorCvs.style.opacity = "1";
+        initMotes();
+        wisps = [];
+        embers = [];
+        cancelAnimationFrame(indoorRaf);
+        indoorRaf = requestAnimationFrame(indoorLoop);
+      }
+
+      function stopIndoor() {
+        indoorActive = false;
+        cancelAnimationFrame(indoorRaf);
+        indoorBgEl.style.opacity = "0";
+        indoorCvs.style.opacity = "0";
+        indoorCtx.clearRect(0, 0, indoorCvs.width, indoorCvs.height);
+      }
+
+      // Alias for applyScene hook
+      function startSteam() {}
+      function stopSteam() {}
+      function startCoffee() {
+        startIndoor();
+      }
+      function stopCoffee() {
+        stopIndoor();
+      }
+
+      // =======================================================
+      // WAVES
+      // =======================================================
+      const wLayer = document.getElementById("waveLayer");
+      function showWaves() {
+        wLayer.style.opacity = "1";
+      }
+      function hideWaves() {
+        wLayer.style.opacity = "0";
+      }
+
+      // =======================================================
+      // CLOUDS (BEACH SCENE)
+      // =======================================================
+      const cloudCvs = document.getElementById("cloudCanvas");
+      const cloudCtx = cloudCvs.getContext("2d");
+
+      function resizeCloud() {
+        cloudCvs.width = window.innerWidth;
+        cloudCvs.height = window.innerHeight;
+      }
+      resizeCloud();
+      window.addEventListener("resize", () => {
+        resizeCloud();
+        if (scene === "beach") initClouds();
+      });
+
+      let clouds = [];
+      let cloudRaf;
+      let cloudActive = false;
+
+      // Cloud shape: a cluster of overlapping circles
+      function mkCloud(scatter) {
+        const W = cloudCvs.width,
+          H = cloudCvs.height;
+        const skyH = H * 0.58; // clouds only in top 58% of screen
+        const depth = Math.random(); // 0=far/small, 1=near/large
+        const baseR = 28 + depth * 55;
+        const numPuffs = 4 + Math.floor(depth * 5);
+        const puffs = [];
+        let cx = 0,
+          cy = 0;
+        for (let i = 0; i < numPuffs; i++) {
+          const angle = (i / numPuffs) * Math.PI * 1.4 - Math.PI * 0.2;
+          const dist = baseR * (0.45 + Math.random() * 0.5);
+          const pr = baseR * (0.5 + Math.random() * 0.65);
+          const px = Math.cos(angle) * dist * 1.4;
+          const py = Math.sin(angle) * dist * 0.55 - baseR * 0.15;
+          puffs.push({ ox: px, oy: py, r: pr });
+          cx += px;
+          cy += py;
+        }
+        // Add a large central puff
+        puffs.push({ ox: 0, oy: -baseR * 0.1, r: baseR * 0.9 });
+
+        return {
+          x: scatter
+            ? Math.random() * (W + 400) - 200
+            : W + 300 + Math.random() * 200,
+          y: 30 + Math.random() * skyH * 0.8,
+          speed: 0.08 + (1 - depth) * 0.12 + Math.random() * 0.06,
+          alpha: 0.55 + depth * 0.3,
+          depth,
+          puffs,
+          baseR,
+          // Subtle vertical bob
+          bobAmp: 0.4 + Math.random() * 0.8,
+          bobSpd: 0.003 + Math.random() * 0.005,
+          bobPhase: Math.random() * Math.PI * 2,
+          // Pink/gold tint near horizon based on depth
+          tint:
+            depth < 0.3
+              ? { r: 255, g: 240, b: 230 }
+              : { r: 255, g: 255, b: 255 },
+        };
+      }
+
+      function initClouds() {
+        clouds = [];
+        // Scatter 10–14 clouds across the sky
+        const n = 10 + Math.floor(Math.random() * 5);
+        for (let i = 0; i < n; i++) clouds.push(mkCloud(true));
+      }
+
+      function drawCloud(cloud, t) {
+        const { x, y, puffs, alpha, tint, bobAmp, bobSpd, bobPhase } = cloud;
+        const bobY = Math.sin(t * bobSpd + bobPhase) * bobAmp;
+
+        cloudCtx.save();
+        cloudCtx.translate(x, y + bobY);
+
+        // Shadow underneath for depth
+        cloudCtx.globalCompositeOperation = "source-over";
+
+        puffs.forEach((p) => {
+          // Soft shadow pass
+          const sdGrd = cloudCtx.createRadialGradient(
+            p.ox + 3,
+            p.oy + p.r * 0.4,
+            0,
+            p.ox,
+            p.oy,
+            p.r * 1.1,
+          );
+          sdGrd.addColorStop(0, `rgba(100,140,180,${alpha * 0.18})`);
+          sdGrd.addColorStop(1, `rgba(100,140,180,0)`);
+          cloudCtx.beginPath();
+          cloudCtx.arc(p.ox, p.oy, p.r * 1.1, 0, Math.PI * 2);
+          cloudCtx.fillStyle = sdGrd;
+          cloudCtx.fill();
+        });
+
+        // Main cloud puffs — lit from top-left
+        puffs.forEach((p) => {
+          const grd = cloudCtx.createRadialGradient(
+            p.ox - p.r * 0.3,
+            p.oy - p.r * 0.35,
+            p.r * 0.05,
+            p.ox,
+            p.oy,
+            p.r,
+          );
+          grd.addColorStop(0, `rgba(${tint.r},${tint.g},${tint.b},${alpha})`);
+          grd.addColorStop(
+            0.5,
+            `rgba(${tint.r},${tint.g},${tint.b - 5},${alpha * 0.88})`,
+          );
+          grd.addColorStop(
+            1,
+            `rgba(${Math.max(tint.r - 30, 180)},${Math.max(tint.g - 40, 185)},${Math.max(tint.b - 50, 200)},${alpha * 0.35})`,
+          );
+          cloudCtx.beginPath();
+          cloudCtx.arc(p.ox, p.oy, p.r, 0, Math.PI * 2);
+          cloudCtx.fillStyle = grd;
+          cloudCtx.fill();
+        });
+
+        // Bright highlight on top puff
+        const topPuff = puffs[puffs.length - 1];
+        const hlGrd = cloudCtx.createRadialGradient(
+          topPuff.ox - topPuff.r * 0.28,
+          topPuff.oy - topPuff.r * 0.38,
+          0,
+          topPuff.ox,
+          topPuff.oy,
+          topPuff.r * 0.7,
+        );
+        hlGrd.addColorStop(0, `rgba(255,255,255,${alpha * 0.55})`);
+        hlGrd.addColorStop(1, `rgba(255,255,255,0)`);
+        cloudCtx.beginPath();
+        cloudCtx.arc(topPuff.ox, topPuff.oy, topPuff.r * 0.7, 0, Math.PI * 2);
+        cloudCtx.fillStyle = hlGrd;
+        cloudCtx.fill();
+
+        cloudCtx.restore();
+      }
+
+      let cloudT = 0;
+      function animateClouds() {
+        if (!cloudActive) return;
+        cloudT++;
+        cloudCtx.clearRect(0, 0, cloudCvs.width, cloudCvs.height);
+
+        // Draw far clouds first (low depth), then near
+        const sorted = [...clouds].sort((a, b) => a.depth - b.depth);
+        sorted.forEach((c) => {
+          drawCloud(c, cloudT);
+          c.x -= c.speed;
+          // Wrap around: when cloud fully exits left, respawn on right
+          if (c.x < -400) {
+            Object.assign(c, mkCloud(false));
+          }
+        });
+
+        cloudRaf = requestAnimationFrame(animateClouds);
+      }
+
+      function startClouds() {
+        cloudActive = true;
+        cloudCvs.style.opacity = "1";
+        initClouds();
+        cancelAnimationFrame(cloudRaf);
+        cloudRaf = requestAnimationFrame(animateClouds);
+      }
+
+      function stopClouds() {
+        cloudActive = false;
+        cancelAnimationFrame(cloudRaf);
+        cloudCvs.style.opacity = "0";
+        cloudCtx.clearRect(0, 0, cloudCvs.width, cloudCvs.height);
+      }
+
+      // =======================================================
+      // SEAGULLS
+      // =======================================================
+      let gulInt;
+      function startGulls() {
+        clearInterval(gulInt);
+        gulInt = setInterval(() => {
+          if (scene !== "beach") return;
+          const g = document.createElement("div");
+          g.className = "seagull";
+          g.textContent = "🕊";
+          g.style.cssText = `top:${8 + Math.random() * 38}%;animation-duration:${13 + Math.random() * 10}s`;
+          document.body.appendChild(g);
+          setTimeout(() => g.remove(), 28000);
+        }, 5500);
+      }
+      function stopGulls() {
+        clearInterval(gulInt);
+      }
+
+      // =======================================================
+      // CARD GLASS DROPS
+      // =======================================================
+      const cg = document.getElementById("cardGlass");
+      let cgInt;
+      function startCardGlass() {
+        cg.innerHTML = "";
+        clearInterval(cgInt);
+        const n = scene === "thunder" ? 20 : 12;
+        for (let i = 0; i < n; i++) addGDrop();
+        cgInt = setInterval(addGDrop, scene === "thunder" ? 250 : 500);
+      }
+      function addGDrop() {
+        const d = document.createElement("div");
+        d.className = "glass-drop";
+        const sz = 2.5 + Math.random() * 4;
+        d.style.cssText = `left:${Math.random() * 100}%;top:${Math.random() * 15}%;width:${sz}px;height:${sz * 2.5}px;animation-duration:${2 + Math.random() * 3.5}s;animation-delay:${Math.random() * 5}s`;
+        cg.appendChild(d);
+        setTimeout(() => d.remove(), 10000);
+      }
+      function stopCardGlass() {
+        clearInterval(cgInt);
+        cg.innerHTML = "";
+      }
+
+      // =======================================================
+      // APPLY SCENE
+      // =======================================================
+      function applyScene(name, init) {
+        scene = name;
+        const s = SCENES[name];
+        windNow = windTarget = s.rainAngle || 0.5;
+
+        if (!init) {
+          const ov = document.getElementById("transOverlay");
+          ov.classList.add("on");
+          setTimeout(() => ov.classList.remove("on"), 800);
+        }
+
+        document.getElementById("bgLayer").style.background = s.bg;
+        document.body.style.background = s.body;
+        document.documentElement.style.setProperty("--accent", s.accent);
+        document.documentElement.style.setProperty("--accent2", s.accent2);
+        document.documentElement.style.setProperty("--text", s.text);
+        document.documentElement.style.setProperty("--muted", s.muted);
+        document.documentElement.style.setProperty("--card-bg", s.card);
+
+        document.getElementById("album").style.background = s.albumBg;
+        document.getElementById("album").style.boxShadow = s.albumShadow;
+        document
+          .getElementById("album")
+          .style.setProperty("--album-glow", s.albumGlow);
+        document.getElementById("album").querySelector(".album-dot") || 0;
+        document.getElementById("adot").style.background = s.dotBg;
+        document.getElementById("adot").style.borderColor = s.accent + "66";
+        document.getElementById("adot").style.boxShadow =
+          `0 0 10px ${s.accent}44`;
+        document.getElementById("r1").style.borderColor = s.ringA;
+        document.getElementById("r2").style.borderColor = s.ringB;
+        document.getElementById("pFill").style.background =
+          `linear-gradient(90deg,${s.accent},${s.accent2})`;
+        document.getElementById("pFill").style.boxShadow = `0 0 8px ${s.pGlow}`;
+        document
+          .querySelectorAll(".bar")
+          .forEach(
+            (b) =>
+              (b.style.background = `linear-gradient(to top,${s.accent},${s.accent2})`),
+          );
+        document.getElementById("bdot").style.background = s.accent;
+        document.getElementById("bdot").style.boxShadow = `0 0 6px ${s.accent}`;
+        document.getElementById("btext").textContent = s.badge;
+
+        document.getElementById("fogLayer").style.opacity = s.fog ? "1" : "0";
+
+        if (s.ripples) startRipples();
+        else stopRipples();
+        if (s.coffee) startCoffee();
+        else stopCoffee();
+        if (s.waves) showWaves();
+        else hideWaves();
+        if (s.beach) startGulls();
+        else stopGulls();
+        if (s.beach) startClouds();
+        else stopClouds();
+        if (s.ripples || s.storm) startCardGlass();
+        else stopCardGlass();
+        if (s.thunder) scheduleLightning();
+        else {
+          fx.clearRect(0, 0, fc.width, fc.height);
+          lOvl.style.opacity = "0";
+        }
+        if (s.storm) startGale();
+        else stopGale();
+
+        makeDrops();
+
+        // Rebuild playlist
+        buildPlaylist();
+        trackIdx = 0;
+        progSec = 0;
+        updateUI();
+      }
+
+      // =======================================================
+      // PLAYLIST
+      // =======================================================
+      function buildPlaylist() {
+        const s = SCENES[scene];
+        const el = document.getElementById("plList");
+        el.innerHTML = "";
+        document.getElementById("plLabel").textContent = s.label;
+        s.tracks.forEach((tr, i) => {
+          const d = document.createElement("div");
+          d.className = "pl-item" + (i === 0 ? " active" : "");
+
+          let duration = tr.d;
+          if (tr.src && duration === 0) {
+            const tempAudio = new Audio(tr.src);
+            tempAudio.addEventListener("loadedmetadata", function () {
+              tr.d = Math.floor(tempAudio.duration);
+              const durEl = d.querySelector(".pl-dur");
+              if (durEl) durEl.textContent = fmt(tr.d);
+            });
+            tempAudio.addEventListener("error", function () {
+              const durEl = d.querySelector(".pl-dur");
+              if (durEl) durEl.textContent = "加载失败";
+            });
+          }
+
+          d.innerHTML = `<div class="pl-num">${i + 1}</div><div class="pl-info"><div class="pl-title">${tr.t}</div><div class="pl-artist">${tr.a}</div></div><div class="pl-dur">${duration > 0 ? fmt(duration) : "加载中..."}</div>`;
+          d.addEventListener("click", () => {
+            trackIdx = i;
+            progSec = 0;
+            loadAndPlayTrack();
+            updateUI();
+            syncPL();
+            if (!playing) {
+              rafTs = null;
+              setPlaying(true);
+            }
+          });
+          el.appendChild(d);
+        });
+      }
+      function syncPL() {
+        document
+          .querySelectorAll(".pl-item")
+          .forEach((el, i) => el.classList.toggle("active", i === trackIdx));
+      }
+
+      // =======================================================
+      // PLAYER
+      // =======================================================
+      function fmt(s) {
+        return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+      }
+
+      function updateUI() {
+        const tr = SCENES[scene].tracks[trackIdx];
+        document.getElementById("sTitle").textContent = tr.t;
+        document.getElementById("sArtist").textContent = tr.a;
+        document.getElementById("tTime").textContent = fmt(tr.d);
+        document.getElementById("cTime").textContent = fmt(progSec);
+        document.getElementById("pFill").style.width =
+          ((progSec / tr.d) * 100).toFixed(2) + "%";
+        // document.getElementById("albumIcon").textContent = getSceneIcon(scene);
+        syncPL();
+      }
+
+      function getSceneIcon(sceneName) {
+        const icons = {
+          rainy: "🌧",
+          thunder: "⛈",
+          storm: "💨",
+          cafe: "🕯",
+          beach: "🌊",
+        };
+        return icons[sceneName] || "🌧";
+      }
+
+      function setPlaying(val) {
+        playing = val;
+        document.getElementById("iPlay").style.display = val ? "none" : "block";
+        document.getElementById("iPause").style.display = val
+          ? "block"
+          : "none";
+        document.getElementById("album").classList.toggle("playing", val);
+        document.getElementById("viz").classList.toggle("paused", !val);
+
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          if (val) {
+            audio.loop = repeatMode === 1;
+            if (audio.src !== track.src) {
+              audio.src = track.src;
+              audio.load();
+            }
+            audio.play().catch((e) => console.error("播放失败:", e));
+          } else {
+            audio.pause();
+          }
+        }
+
+        if (val) {
+          rafTs = null;
+          requestAnimationFrame(tick);
+        } else cancelAnimationFrame(raf);
+      }
+
+      function tick(ts) {
+        if (rafTs !== null) {
+          const track = SCENES[scene].tracks[trackIdx];
+
+          if (track.src && audio.src && audio.src.includes(track.src)) {
+            progSec = audio.currentTime;
+            const dur = audio.duration;
+            if (dur > 0) {
+              track.d = Math.floor(dur);
+            }
+          } else {
+            progSec += (ts - rafTs) / 1000;
+            const dur = track.d;
+            if (dur > 0 && progSec >= dur) {
+              progSec = 0;
+              if (repeatMode !== 1) {
+                playNextTrack();
+              }
+            }
+          }
+          updateUI();
+        }
+        rafTs = ts;
+        raf = requestAnimationFrame(tick);
+      }
+
+      function playNextTrack() {
+        const n = SCENES[scene].tracks.length;
+        trackIdx = shuffled
+          ? Math.floor(Math.random() * n)
+          : (trackIdx + 1) % n;
+        progSec = 0;
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          audio.src = track.src;
+          audio.load();
+          audio.play().catch((e) => console.error("播放失败:", e));
+        }
+        updateUI();
+        syncPL();
+      }
+
+      document
+        .getElementById("bPlay")
+        .addEventListener("click", () => setPlaying(!playing));
+      document.getElementById("bNext").addEventListener("click", () => {
+        const n = SCENES[scene].tracks.length;
+        trackIdx = shuffled
+          ? Math.floor(Math.random() * n)
+          : (trackIdx + 1) % n;
+        progSec = 0;
+        loadAndPlayTrack();
+      });
+      document.getElementById("bPrev").addEventListener("click", () => {
+        const n = SCENES[scene].tracks.length;
+        trackIdx = (trackIdx - 1 + n) % n;
+        progSec = 0;
+        loadAndPlayTrack();
+      });
+
+      function loadAndPlayTrack() {
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          audio.loop = repeatMode === 1;
+          audio.src = track.src;
+          audio.load();
+          if (playing) {
+            audio.play().catch((e) => console.error("播放失败:", e));
+          }
+        }
+        updateUI();
+        syncPL();
+      }
+
+      document.getElementById("pWrap").addEventListener("click", (e) => {
+        const r = document.getElementById("pWrap").getBoundingClientRect();
+        const track = SCENES[scene].tracks[trackIdx];
+        const dur = track.d > 0 ? track.d : 300;
+        progSec = ((e.clientX - r.left) / r.width) * dur;
+        if (track.src && audio.src && audio.src.includes(track.src)) {
+          audio.currentTime = progSec;
+        }
+        updateUI();
+      });
+      document
+        .getElementById("bShuffle")
+        .addEventListener("click", function () {
+          shuffled = !shuffled;
+          this.classList.toggle("active", shuffled);
+        });
+      document.getElementById("bRepeat").addEventListener("click", function () {
+        repeatMode = (repeatMode + 1) % 3;
+        const badge = document.getElementById("repeatBadge");
+        if (repeatMode === 0) {
+          this.classList.remove("active");
+          badge.style.display = "none";
+          audio.loop = false;
+        } else if (repeatMode === 1) {
+          this.classList.add("active");
+          badge.style.display = "flex";
+          badge.textContent = "1";
+          audio.loop = true;
+        } else {
+          this.classList.add("active");
+          badge.style.display = "flex";
+          badge.textContent = "∞";
+          audio.loop = false;
+        }
+      });
+      document.getElementById("vol").addEventListener("input", function () {
+        const p = this.value;
+        this.style.background = `linear-gradient(90deg,var(--accent) ${p}%,rgba(126,200,227,.1) ${p}%)`;
+        audio.volume = p / 100;
+      });
+
+      // =======================================================
+      // SCENE BAR — fill layout, no scroll needed
+      // =======================================================
+      (function () {
+        const btns = Array.from(document.querySelectorAll(".scene-btn"));
+
+        btns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (btn.dataset.scene === scene) return;
+            btns.forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const wasPlaying = playing;
+            if (playing) setPlaying(false);
+            applyScene(btn.dataset.scene, false);
+            if (wasPlaying) setTimeout(() => setPlaying(true), 200);
+          });
+        });
+      })();
+
+      // =======================================================
+      // VISUALIZER
+      // =======================================================
+      const heights = [
+        16, 10, 24, 18, 8, 28, 20, 12, 26, 14, 22, 9, 18, 24, 11, 16, 20, 14,
+        22, 16,
+      ];
+      heights.forEach((h, i) => {
+        const b = document.createElement("div");
+        b.className = "bar";
+        b.style.cssText = `--h:${h}px;animation-delay:${i * 0.07}s;height:${h}px`;
+        document.getElementById("viz").appendChild(b);
+      });
+
+      // =======================================================
+      // INIT
+      // =======================================================
+      applyScene("rainy", true);
+    </script>
+  </body>
+</html>
