@@ -678,6 +678,19 @@
           border-color 2s,
           box-shadow 2s;
       }
+      .album-icon {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .album.playing .album-icon {
+        opacity: 1;
+      }
 
       /* SONG INFO */
       .song-info {
@@ -1086,6 +1099,7 @@
         <div class="a-ring" id="r2"></div>
         <div class="album" id="album">
           <div class="album-dot" id="adot"></div>
+          <div class="album-icon" id="albumIcon">🌧</div>
         </div>
       </div>
 
@@ -2598,6 +2612,7 @@
           d.addEventListener("click", () => {
             trackIdx = i;
             progSec = 0;
+            loadAndPlayTrack();
             updateUI();
             syncPL();
             if (!playing) {
@@ -2629,7 +2644,19 @@
         document.getElementById("cTime").textContent = fmt(progSec);
         document.getElementById("pFill").style.width =
           ((progSec / tr.d) * 100).toFixed(2) + "%";
+        document.getElementById("albumIcon").textContent = getSceneIcon(scene);
         syncPL();
+      }
+
+      function getSceneIcon(sceneName) {
+        const icons = {
+          rainy: "🌧",
+          thunder: "⛈",
+          storm: "💨",
+          cafe: "🕯",
+          beach: "🌊",
+        };
+        return icons[sceneName] || "🌧";
       }
 
       function setPlaying(val) {
