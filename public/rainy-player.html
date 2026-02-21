@@ -1460,6 +1460,24 @@
       let audio = new Audio();
       audio.loop = true;
 
+      audio.addEventListener("ended", function () {
+        if (!audio.loop) {
+          playNextTrack();
+        }
+      });
+
+      audio.addEventListener("loadedmetadata", function () {
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track && track.src && audio.src.includes(track.src)) {
+          track.d = Math.floor(audio.duration);
+          updateUI();
+        }
+      });
+
+      audio.addEventListener("error", function (e) {
+        console.error("音频加载错误:", e);
+      });
+
       // =======================================================
       // CANVAS
       // =======================================================
@@ -2626,8 +2644,10 @@
         const track = SCENES[scene].tracks[trackIdx];
         if (track.src) {
           if (val) {
+            audio.loop = repeating;
             if (audio.src !== track.src) {
               audio.src = track.src;
+              audio.load();
             }
             audio.play().catch((e) => console.error("播放失败:", e));
           } else {
@@ -2650,16 +2670,6 @@
             const dur = audio.duration;
             if (dur > 0) {
               track.d = Math.floor(dur);
-              if (audio.ended && !audio.loop) {
-                progSec = 0;
-                if (!repeating) {
-                  const n = SCENES[scene].tracks.length;
-                  trackIdx = shuffled
-                    ? Math.floor(Math.random() * n)
-                    : (trackIdx + 1) % n;
-                  setPlaying(false);
-                }
-              }
             }
           } else {
             progSec += (ts - rafTs) / 1000;
@@ -2667,10 +2677,7 @@
             if (dur > 0 && progSec >= dur) {
               progSec = 0;
               if (!repeating) {
-                const n = SCENES[scene].tracks.length;
-                trackIdx = shuffled
-                  ? Math.floor(Math.random() * n)
-                  : (trackIdx + 1) % n;
+                playNextTrack();
               }
             }
           }
@@ -2680,45 +2687,62 @@
         raf = requestAnimationFrame(tick);
       }
 
+      function playNextTrack() {
+        const n = SCENES[scene].tracks.length;
+        trackIdx = shuffled
+          ? Math.floor(Math.random() * n)
+          : (trackIdx + 1) % n;
+        progSec = 0;
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          audio.src = track.src;
+          audio.load();
+          audio.play().catch((e) => console.error("播放失败:", e));
+        }
+        updateUI();
+        syncPL();
+      }
+
       document
         .getElementById("bPlay")
         .addEventListener("click", () => setPlaying(!playing));
       document.getElementById("bNext").addEventListener("click", () => {
         const n = SCENES[scene].tracks.length;
-        progSec = 0;
         trackIdx = shuffled
           ? Math.floor(Math.random() * n)
           : (trackIdx + 1) % n;
-        const track = SCENES[scene].tracks[trackIdx];
-        if (track.src) {
-          audio.src = track.src;
-        }
-        updateUI();
-        if (playing) {
-          cancelAnimationFrame(raf);
-          rafTs = null;
-          requestAnimationFrame(tick);
-        }
+        progSec = 0;
+        loadAndPlayTrack();
       });
       document.getElementById("bPrev").addEventListener("click", () => {
         const n = SCENES[scene].tracks.length;
-        progSec = 0;
         trackIdx = (trackIdx - 1 + n) % n;
+        progSec = 0;
+        loadAndPlayTrack();
+      });
+
+      function loadAndPlayTrack() {
         const track = SCENES[scene].tracks[trackIdx];
         if (track.src) {
+          audio.loop = repeating;
           audio.src = track.src;
+          audio.load();
+          if (playing) {
+            audio.play().catch((e) => console.error("播放失败:", e));
+          }
         }
         updateUI();
-        if (playing) {
-          cancelAnimationFrame(raf);
-          rafTs = null;
-          requestAnimationFrame(tick);
-        }
-      });
+        syncPL();
+      }
+
       document.getElementById("pWrap").addEventListener("click", (e) => {
         const r = document.getElementById("pWrap").getBoundingClientRect();
-        progSec =
-          ((e.clientX - r.left) / r.width) * SCENES[scene].tracks[trackIdx].d;
+        const track = SCENES[scene].tracks[trackIdx];
+        const dur = track.d > 0 ? track.d : 300;
+        progSec = ((e.clientX - r.left) / r.width) * dur;
+        if (track.src && audio.src && audio.src.includes(track.src)) {
+          audio.currentTime = progSec;
+        }
         updateUI();
       });
       document
@@ -2730,10 +2754,14 @@
       document.getElementById("bRepeat").addEventListener("click", function () {
         repeating = !repeating;
         this.classList.toggle("active", repeating);
+        if (playing) {
+          audio.loop = repeating;
+        }
       });
       document.getElementById("vol").addEventListener("input", function () {
         const p = this.value;
         this.style.background = `linear-gradient(90deg,var(--accent) ${p}%,rgba(126,200,227,.1) ${p}%)`;
+        audio.volume = p / 100;
       });
 
       // =======================================================
