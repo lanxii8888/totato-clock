@@ -1,111 +1,121 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>番茄时钟 & 白噪音</title>
-  <link rel="icon" href="svg/favicon.svg" type="image/svg+xml" />
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-      background: linear-gradient(135deg, #f5f0eb 0%, #e8e4df 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .container {
-      max-width: 800px;
-      width: 100%;
-    }
-    h1 {
-      text-align: center;
-      color: #2c2c2c;
-      margin-bottom: 40px;
-      font-size: 2.5rem;
-      font-weight: 300;
-    }
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 24px;
-      margin-bottom: 40px;
-    }
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      text-decoration: none;
-      color: inherit;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-      transition: all 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-    }
-    .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-    }
-    .card-icon {
-      font-size: 64px;
-    }
-    .card-title {
-      font-size: 1.5rem;
-      font-weight: 500;
-      color: #2c2c2c;
-    }
-    .card-desc {
-      color: #888;
-      font-size: 0.95rem;
-      text-align: center;
-      line-height: 1.6;
-    }
-    .footer {
-      text-align: center;
-      color: #888;
-      font-size: 0.9rem;
-      padding-top: 20px;
-      border-top: 1px solid rgba(0, 0, 0, 0.1);
-    }
-    @media (max-width: 600px) {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>番茄时钟 & 白噪音</title>
+    <link rel="icon" href="svg/favicon.svg" type="image/svg+xml" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+          sans-serif;
+        background: linear-gradient(135deg, #f5f0eb 0%, #e8e4df 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .container {
+        max-width: 800px;
+        width: 100%;
+      }
       h1 {
-        font-size: 2rem;
+        text-align: center;
+        color: #2c2c2c;
+        margin-bottom: 40px;
+        font-size: 2.5rem;
+        font-weight: 300;
       }
       .cards {
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
+        margin-bottom: 40px;
       }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>🍅 番茄时钟 & 白噪音</h1>
-    
-    <div class="cards">
-      <a href="clock.html" class="card">
-        <div class="card-icon">🍅</div>
-        <div class="card-title">极简番茄</div>
-        <div class="card-desc">专注时间管理工具<br>使用番茄工作法提高效率</div>
-      </a>
-      
-      <a href="noise.html" class="card">
-        <div class="card-icon">🌊</div>
-        <div class="card-title">泡泡白噪音</div>
-        <div class="card-desc">自然白噪音播放器<br>营造专注环境</div>
-      </a>
+      .card {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        text-decoration: none;
+        color: inherit;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      }
+      .card-icon {
+        font-size: 64px;
+      }
+      .card-title {
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: #2c2c2c;
+      }
+      .card-desc {
+        color: #888;
+        font-size: 0.95rem;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .footer {
+        text-align: center;
+        color: #888;
+        font-size: 0.9rem;
+        padding-top: 20px;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 2rem;
+        }
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🍅 番茄时钟 & 白噪音</h1>
+
+      <div class="cards">
+        <a href="clock.html" class="card">
+          <div class="card-icon">🍅</div>
+          <div class="card-title">极简番茄</div>
+          <div class="card-desc">
+            专注时间管理工具<br />使用番茄工作法提高效率
+          </div>
+        </a>
+
+        <a href="noise.html" class="card">
+          <div class="card-icon">🌊</div>
+          <div class="card-title">泡泡白噪音</div>
+          <div class="card-desc">自然白噪音播放器<br />营造专注环境</div>
+        </a>
+
+        <a href="rainy-player.html" class="card">
+          <div class="card-icon">🌧️</div>
+          <div class="card-title">雨声播放器</div>
+          <div class="card-desc">沉浸式雨声体验<br />助眠放松专注</div>
+        </a>
+      </div>
+
+      <div class="footer">
+        <p>选择一个工具开始使用</p>
+      </div>
     </div>
-    
-    <div class="footer">
-      <p>选择一个工具开始使用</p>
-    </div>
-  </div>
-</body>
+  </body>
 </html>
