@@ -1294,23 +1294,19 @@
           rainColor: "#c8b8ff",
           label: "⛈ 雷鸣歌单",
           tracks: [
-            { t: "雷雨", a: "本地音频", d: 300, src: "audio/rainy/雷雨.wav" },
+            { t: "雷雨", a: "本地音频", d: 0, src: "audio/rainy/雷雨.wav" },
             {
               t: "雷雨 (2)",
               a: "本地音频",
-              d: 300,
+              d: 0,
               src: "audio/rainy/雷雨 (2).wav",
             },
             {
               t: "雷雨 (3)",
               a: "本地音频",
-              d: 300,
+              d: 0,
               src: "audio/rainy/雷雨 (3).wav",
             },
-            { t: "Thunder at 3AM", a: "Storm Collective", d: 288 },
-            { t: "Purple Lightning", a: "Midnight Surge", d: 312 },
-            { t: "Before the Storm", a: "Electric Dreams", d: 245 },
-            { t: "Rumble & Hush", a: "Atmospheric", d: 378 },
           ],
         },
         storm: {
@@ -1349,23 +1345,19 @@
           rainColor: "transparent",
           label: "💨 狂风歌单",
           tracks: [
-            { t: "狂风", a: "本地音频", d: 300, src: "audio/rainy/狂风.wav" },
+            { t: "狂风", a: "本地音频", d: 0, src: "audio/rainy/狂风.wav" },
             {
               t: "狂风 (2)",
               a: "本地音频",
-              d: 300,
+              d: 0,
               src: "audio/rainy/狂风 (2).wav",
             },
             {
               t: "狂风 (3)",
               a: "本地音频",
-              d: 300,
+              d: 0,
               src: "audio/rainy/狂风 (3).wav",
             },
-            { t: "Howling Dark", a: "Tempest", d: 287 },
-            { t: "Dust & Fury", a: "Gale Force", d: 334 },
-            { t: "Against the Wind", a: "Weather Systems", d: 412 },
-            { t: "Restless Sky", a: "Drift Sound", d: 356 },
           ],
         },
         cafe: {
@@ -1465,6 +1457,8 @@
         windTarget = 0.5,
         windTimer = 0;
       let drops = [];
+      let audio = new Audio();
+      audio.loop = true;
 
       // =======================================================
       // CANVAS
@@ -2567,7 +2561,22 @@
         s.tracks.forEach((tr, i) => {
           const d = document.createElement("div");
           d.className = "pl-item" + (i === 0 ? " active" : "");
-          d.innerHTML = `<div class="pl-num">${i + 1}</div><div class="pl-info"><div class="pl-title">${tr.t}</div><div class="pl-artist">${tr.a}</div></div><div class="pl-dur">${fmt(tr.d)}</div>`;
+
+          let duration = tr.d;
+          if (tr.src && duration === 0) {
+            const tempAudio = new Audio(tr.src);
+            tempAudio.addEventListener("loadedmetadata", function () {
+              tr.d = Math.floor(tempAudio.duration);
+              const durEl = d.querySelector(".pl-dur");
+              if (durEl) durEl.textContent = fmt(tr.d);
+            });
+            tempAudio.addEventListener("error", function () {
+              const durEl = d.querySelector(".pl-dur");
+              if (durEl) durEl.textContent = "加载失败";
+            });
+          }
+
+          d.innerHTML = `<div class="pl-num">${i + 1}</div><div class="pl-info"><div class="pl-title">${tr.t}</div><div class="pl-artist">${tr.a}</div></div><div class="pl-dur">${duration > 0 ? fmt(duration) : "加载中..."}</div>`;
           d.addEventListener("click", () => {
             trackIdx = i;
             progSec = 0;
@@ -2613,6 +2622,19 @@
           : "none";
         document.getElementById("album").classList.toggle("playing", val);
         document.getElementById("viz").classList.toggle("paused", !val);
+
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          if (val) {
+            if (audio.src !== track.src) {
+              audio.src = track.src;
+            }
+            audio.play().catch((e) => console.error("播放失败:", e));
+          } else {
+            audio.pause();
+          }
+        }
+
         if (val) {
           rafTs = null;
           requestAnimationFrame(tick);
@@ -2621,15 +2643,35 @@
 
       function tick(ts) {
         if (rafTs !== null) {
-          progSec += (ts - rafTs) / 1000;
-          const dur = SCENES[scene].tracks[trackIdx].d;
-          if (progSec >= dur) {
-            progSec = 0;
-            if (!repeating) {
-              const n = SCENES[scene].tracks.length;
-              trackIdx = shuffled
-                ? Math.floor(Math.random() * n)
-                : (trackIdx + 1) % n;
+          const track = SCENES[scene].tracks[trackIdx];
+
+          if (track.src && audio.src && audio.src.includes(track.src)) {
+            progSec = audio.currentTime;
+            const dur = audio.duration;
+            if (dur > 0) {
+              track.d = Math.floor(dur);
+              if (audio.ended && !audio.loop) {
+                progSec = 0;
+                if (!repeating) {
+                  const n = SCENES[scene].tracks.length;
+                  trackIdx = shuffled
+                    ? Math.floor(Math.random() * n)
+                    : (trackIdx + 1) % n;
+                  setPlaying(false);
+                }
+              }
+            }
+          } else {
+            progSec += (ts - rafTs) / 1000;
+            const dur = track.d;
+            if (dur > 0 && progSec >= dur) {
+              progSec = 0;
+              if (!repeating) {
+                const n = SCENES[scene].tracks.length;
+                trackIdx = shuffled
+                  ? Math.floor(Math.random() * n)
+                  : (trackIdx + 1) % n;
+              }
             }
           }
           updateUI();
@@ -2647,6 +2689,10 @@
         trackIdx = shuffled
           ? Math.floor(Math.random() * n)
           : (trackIdx + 1) % n;
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          audio.src = track.src;
+        }
         updateUI();
         if (playing) {
           cancelAnimationFrame(raf);
@@ -2658,6 +2704,10 @@
         const n = SCENES[scene].tracks.length;
         progSec = 0;
         trackIdx = (trackIdx - 1 + n) % n;
+        const track = SCENES[scene].tracks[trackIdx];
+        if (track.src) {
+          audio.src = track.src;
+        }
         updateUI();
         if (playing) {
           cancelAnimationFrame(raf);
